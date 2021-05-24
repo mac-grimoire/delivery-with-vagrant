@@ -1,0 +1,36 @@
+---
+config:
+  vagrant_user_password: "grimoire"
+  servers: 
+    - hostname: "tools-ci-up3a001"
+      domain: "mgmt.__LAB_DOMAIN__"
+      vmname: "grimoire_tools-ci-up3a001"
+      box: "centos/8"
+      ram: 2048
+      cpu: 2
+      reload: "false"
+      interfaces:
+        - id: 2
+          type: "hostonly"
+          network: "private_network"
+          bridge: "private"
+          ip: "10.0.0.8"
+          vlan: "111"
+          private_ip: "192.168.151.10"
+          mask: 24
+          private_routes: "192.168.0.0/16 192.168.151.254"
+          promisc: "deny"
+          trace: "off"
+        - id: 3
+          type: "public_network"
+          network: "public_network"
+          bridge: "__TOOLS_VM_PUBLIC_BRIDGE_NAME__"
+          ip: "__TOOLS_VM_PUBLIC_IP__"
+          private_ip: "192.168.42.10"
+          promisc: "deny"
+          trace: "off"
+      disks:
+        - id: 1
+          size: 10024
+          port: 0
+          device: 1

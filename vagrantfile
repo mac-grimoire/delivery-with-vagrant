@@ -1,0 +1,107 @@
+# encoding: utf-8
+# -*- mode: ruby -*-
+# vi: set ft=ruby :
+
+module OS
+  def OS.windows?
+    (/cygwin|mswin|mingw|bccwin|wince|emx/ =~ RUBY_PLATFORM) != nil
+  end
+  def OS.mac?
+    (/darwin/ =~ RUBY_PLATFORM) != nil
+  end
+  def OS.unix?
+    !OS.windows?
+  end
+  def OS.linux?
+    OS.unix? and not OS.mac?
+  end
+end
+
+if OS.windows?
+  puts "Vagrant is running on windows."
+elsif OS.mac?
+  puts "Vagrant is running on mac."
+elsif OS.unix?
+  puts "Vagrant is running on unix."
+elsif OS.linux?
+  puts "Vagrant is running on linux."
+else
+  puts "Vagrant ir running on an unknown platform."
+end
+
+if OS.windows?
+  machine_folder = `VBoxManage list systemproperties | findstr "Default machine folder"`
+else
+  machine_folder = `VBoxManage list systemproperties | grep "Default machine folder"`
+end
+vb_machine_folder = machine_folder.split(':')[1].strip()
+#puts vb_machine_folder 
+
+require 'yaml'
+
+configs = YAML::load(File.read("#{File.dirname(__FILE__)}/config.yml"))
+servers        = configs['config']['servers']
+
+Vagrant.configure(2) do |config|
+  servers.each do |machine|
+    config.ssh.forward_agent = true
+    config.ssh.forward_x11 = true
+    config.vm.define machine['hostname'] do |node|
+      node.vm.synced_folder '.', '/vagrant', disabled: true
+      node.vm.synced_folder "resources/#{machine['hostname']}", "/vagrant"
+      node.vm.hostname = "#{machine['hostname']}.#{machine['domain']}"
+      node.vm.box = machine['box']
+      node.vm.provider 'virtualbox' do |vb|
+        vb.name = machine['vmname']
+        vb.memory = machine['ram']
+        vb.cpus = machine['cpu']
+        if machine['gui'] 
+          vb.gui = machine['gui']
+        else
+          vb.gui = false
+        end
+        if machine['disks'] 
+          machine['disks'].each do |disk|
+            #additional_disk = File.join(vb_machine_folder, vb.name, "disk#{disk['id']+1}.vmdk")
+            #unless File.exist?(additional_disk)
+            unless File.exist?(File.join(vb_machine_folder, vb.name, "disk#{disk['id']+1}.vmdk"))
+              #vb.customize ['createhd', '--filename', additional_disk, '--format', 'VMDK', '--size', disk['size'] ]
+              vb.customize ['createhd', '--filename', File.join(vb_machine_folder, vb.name, "disk#{disk['id']+1}.vmdk"), '--format', 'VMDK', '--size', disk['size'] ]
+            end
+            #vb.customize ['storageattach', :id, '--storagectl', 'IDE', '--port', disk['port'], '--device', disk['device'], '--type', 'hdd', '--medium', additional_disk]
+            vb.customize ['storageattach', :id, '--storagectl', 'IDE', '--port', disk['port'], '--device', disk['device'], '--type', 'hdd', '--medium', File.join(vb_machine_folder, vb.name, "disk#{disk['id']+1}.vmdk")]
+          end
+        end
+      end
+      machine['interfaces'].each do |interface|
+        if interface['type'] == 'hostonly' 
+          node.vm.provider 'virtualbox' do |vb|
+            vb.customize ['modifyvm', :id, '--nic'+interface['id'].to_s, interface['type'], '--bridgeadapter'+interface['id'].to_s, interface['bridge'], '--cableconnected'+interface['id'].to_s, 'on', '--nicpromisc'+interface['id'].to_s, interface['promisc'], '--nictype'+interface['id'].to_s, 'virtio', '--nictrace'+interface['id'].to_s, interface['trace'], '--nictracefile'+interface['id'].to_s, '/tmp/'+machine['vmname']+'-nic'+interface['id'].to_s ]
+          end
+          node.vm.network interface['network'], bridge: interface['bridge'], ip: interface['ip'], auto_config: false
+        else
+          node.vm.network interface['network'],  ip: interface['ip'], bridge: interface['bridge']
+        end
+      end
+      if machine['pat'] 
+        machine['pat'].each do |pat|
+          node.vm.network "forwarded_port", guest: pat['guest_port'], host: pat['host_port']
+        end
+      end
+      node.vm.provision "shell", env: { "VAGRANT_PASSWD" => configs['config']['vagrant_user_password'] }, inline: <<-SHELL
+        echo ${VAGRANT_PASSWD} | sudo passwd vagrant --stdin
+        sudo bash -c 'grep -E "^[ ]*PasswordAuthentication.*" /etc/ssh/sshd_config || "3iPasswordAuthentication yes" /etc/ssh/sshd_config'
+        sudo sed -i '/^#/!s/PasswordAuthentication .*/PasswordAuthentication yes/g' /etc/ssh/sshd_config
+        sudo systemctl restart sshd
+      SHELL
+      node.vm.provision "shell", env: {"VLAN" =>  machine['interfaces'].to_a[0]['vlan'] , "IP" => machine['interfaces'].to_a[0]['private_ip'], "ROUTES" => machine['interfaces'].to_a[0]['private_routes'], "MASK" =>  machine['interfaces'].to_a[0]['mask'] }, path: 'scripts/'+machine['hostname']+'/boot.sh'
+      if machine['reload'] 
+        if machine['reload'] == 'true'
+          node.vm.provision :reload
+        end
+      else 
+        node.vm.provision :reload   
+      end
+    end
+  end
+end
