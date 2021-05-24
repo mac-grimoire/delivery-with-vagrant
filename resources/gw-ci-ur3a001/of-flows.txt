@@ -1,0 +1,15 @@
+# drop everything sent to our whole /16 private subnet
+"cookie=0x1, priority=1, table=0, tcp, nw_dst=192.168.0.0/16, nw_proto=6, actions=drop"
+# permit ARP 
+"cookie=0x2, priority=65535, table=0, priority=65535, arp,action=normal"
+# OSPF
+"cookie=0x3, table=0 priority=60, in_port=eth0,dl_dst=01:00:00:00:00:00/01:00:00:00:00:00 actions=normal"
+"cookie=0x4, table=0 priority=60, in_port=netinfra-tier3,dl_dst=01:00:00:00:00:00/01:00:00:00:00:00 actions=normal"
+"cookie=0x5, priority=65000, table=0, ip, nw_src=172.16.0.253, nw_dst=172.16.0.254, actions=normal"
+"cookie=0x6, priority=65000, table=0, ip, nw_src=172.16.0.254, nw_dst=172.16.0.253, actions=normal"
+# permit ICMP (PING)
+"cookie=0x7, priority=65535, table=0, icmp, icmp_type=0, icmp_code=0 actions=normal"
+"cookie=0x8, priority=65535, table=0, icmp, icmp_type=8, icmp_code=0 actions=normal"
+# SSH from jump-ci-upa003 to any host of 192.168.50.0/24 subnet
+"cookie=0x11, priority=65000, table=0, tcp, nw_src=192.168.254.249, nw_dst=192.168.50.0/24, tp_dst=22, nw_proto=6, actions=normal"
+"cookie=0x12, priority=65000, table=0, tcp, nw_src=192.168.50.0/24, nw_dst=192.168.254.249, tp_src=22, tcp_flags=+ack, nw_proto=6, actions=normal"

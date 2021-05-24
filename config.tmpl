@@ -16,6 +16,20 @@ config:
           ip: "10.0.0.3"
           promisc: "allow-vms"
           trace: "off"
+    - hostname: "gw-ci-ur3a001"
+      domain: "net.__LAB_DOMAIN__"
+      vmname: "grymoire_gw-ci-ur3a001"
+      box: "centos/8"
+      ram: 256
+      cpu: 2
+      interfaces:
+        - id: 2
+          type: "hostonly"
+          network: "private_network"
+          bridge: "vboxnet1"
+          ip: "10.0.0.4"
+          promisc: "allow-vms"
+          trace: "off"
     - hostname: "jump-ci-up3a001"
       domain: "mgmt.__LAB_DOMAIN__"
       vmname: "grymoire_jump-ci-up3a001"
