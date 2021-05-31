@@ -39,7 +39,8 @@ vb_machine_folder = machine_folder.split(':')[1].strip()
 
 require 'yaml'
 
-configs = YAML::load(File.read("#{File.dirname(__FILE__)}/config.yml"))
+#configs = YAML::load(File.read("#{File.dirname(__FILE__)}/config.yml"))
+configs = YAML::load_file("#{File.dirname(__FILE__)}/config.yml")
 servers        = configs['config']['servers']
 
 Vagrant.configure(2) do |config|
