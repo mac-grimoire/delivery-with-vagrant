@@ -18,30 +18,17 @@ module OS
 end
 
 if OS.windows?
-  puts "Vagrant is running on windows."
-elsif OS.mac?
-  puts "Vagrant is running on mac."
-elsif OS.unix?
-  puts "Vagrant is running on unix."
-elsif OS.linux?
-  puts "Vagrant is running on linux."
-else
-  puts "Vagrant ir running on an unknown platform."
-end
-
-if OS.windows?
+  system("VBoxManage  --version > nul 2>&1") or raise "It seems that VBoxManage is not set in your PATH environment variable. Please fix it or the Vagrantfile won't work"
   machine_folder = `VBoxManage list systemproperties | findstr /R "^Default[ ]*machine[ ]*folder"`
   vb_machine_folder = "#{machine_folder.split(':')[1].strip()}:#{machine_folder.split(':')[2].strip()}"
 else
+  system("VBoxManage  --version > /dev/null 2>&1") or raise "It seems that VBoxManage is not set in your PATH environment variable. Please fix it or the Vagrantfile won't work"
   machine_folder = `VBoxManage list systemproperties | grep "Default machine folder"`
   vb_machine_folder = machine_folder.split(':')[1].strip()
 end
-#vb_machine_folder = machine_folder.split(':')[1].strip()
-puts vb_machine_folder 
 
 require 'yaml'
 
-#configs = YAML::load(File.read("#{File.dirname(__FILE__)}/config.yml"))
 configs = YAML::load_file("#{File.dirname(__FILE__)}/config.yml")
 servers        = configs['config']['servers']
 
@@ -51,7 +38,9 @@ Vagrant.configure(2) do |config|
     config.ssh.forward_x11 = true
     config.vm.define machine['hostname'] do |node|
       node.vm.synced_folder '.', '/vagrant', disabled: true
-      node.vm.synced_folder "resources/#{machine['hostname']}", "/vagrant"
+      if Dir.exist?("resources/#{machine['hostname']}")
+        node.vm.synced_folder "resources/#{machine['hostname']}", "/vagrant"
+      end
       node.vm.hostname = "#{machine['hostname']}.#{machine['domain']}"
       node.vm.box = machine['box']
       node.vm.provider 'virtualbox' do |vb|
@@ -65,13 +54,9 @@ Vagrant.configure(2) do |config|
         end
         if machine['disks'] 
           machine['disks'].each do |disk|
-            #additional_disk = File.join(vb_machine_folder, vb.name, "disk#{disk['id']+1}.vmdk")
-            #unless File.exist?(additional_disk)
             unless File.exist?(File.join(vb_machine_folder, vb.name, "disk#{disk['id']+1}.vmdk"))
-              #vb.customize ['createhd', '--filename', additional_disk, '--format', 'VMDK', '--size', disk['size'] ]
               vb.customize ['createhd', '--filename', File.join(vb_machine_folder, vb.name, "disk#{disk['id']+1}.vmdk"), '--format', 'VMDK', '--size', disk['size'] ]
             end
-            #vb.customize ['storageattach', :id, '--storagectl', 'IDE', '--port', disk['port'], '--device', disk['device'], '--type', 'hdd', '--medium', additional_disk]
             vb.customize ['storageattach', :id, '--storagectl', 'IDE', '--port', disk['port'], '--device', disk['device'], '--type', 'hdd', '--medium', File.join(vb_machine_folder, vb.name, "disk#{disk['id']+1}.vmdk")]
           end
         end
@@ -97,14 +82,9 @@ Vagrant.configure(2) do |config|
         sudo sed -i '/^#/!s/PasswordAuthentication .*/PasswordAuthentication yes/g' /etc/ssh/sshd_config
         sudo systemctl restart sshd
       SHELL
-      node.vm.provision "shell", env: {"VLAN" =>  machine['interfaces'].to_a[0]['vlan'] , "IP" => machine['interfaces'].to_a[0]['private_ip'], "ROUTES" => machine['interfaces'].to_a[0]['private_routes'], "MASK" =>  machine['interfaces'].to_a[0]['mask'] }, path: 'scripts/'+machine['hostname']+'/boot.sh'
-      #if machine['reload'] 
-        #if machine['reload'] == 'true'
-          #node.vm.provision :reload
-        #end
-      #else 
-        #node.vm.provision :reload   
-      #end
+      if File.exist?('scripts/'+machine['hostname']+'/boot.sh')
+        node.vm.provision "shell", env: {"VLAN" =>  machine['interfaces'].to_a[0]['vlan'] , "IP" => machine['interfaces'].to_a[0]['private_ip'], "ROUTES" => machine['interfaces'].to_a[0]['private_routes'], "MASK" =>  machine['interfaces'].to_a[0]['mask'] }, path: 'scripts/'+machine['hostname']+'/boot.sh'
+      end
     end
   end
 end
